@@ -31,6 +31,10 @@
           </div>
           <p id="roomInfo">尚未建立房間</p>
           <p id="shareLink"></p>
+          <div id="qrWrap" style="display:none; margin-top:10px;">
+            <p>玩家掃碼加入：</p>
+            <img id="qrImg" alt="Player QR Code" style="width:180px;height:180px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#fff;padding:6px;" />
+          </div>
         </section>
 
         <section class="card col-4">
@@ -81,7 +85,16 @@
         currentPin = data.pin;
 
         document.getElementById("roomInfo").textContent = `房間 PIN: ${data.pin}`;
-        document.getElementById("shareLink").innerHTML = `玩家連結：<a class="link" href="/player.html?pin=${data.pin}" target="_blank">/player.html?pin=${data.pin}</a>`;
+
+        const joinPath = `/player.html?pin=${data.pin}`;
+        const joinUrl = `${window.location.origin}${joinPath}`;
+        document.getElementById("shareLink").innerHTML = `玩家連結：<a class="link" href="${joinPath}" target="_blank">${joinPath}</a><br/><small>${joinUrl}</small>`;
+
+        const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(joinUrl)}`;
+        const qrImg = document.getElementById("qrImg");
+        qrImg.src = qrApi;
+        document.getElementById("qrWrap").style.display = "block";
+
         connectWS(data.pin);
       }
 
