@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kahoo Lite - Host</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 860px; margin: 24px auto; padding: 0 12px; }
+      .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+      input, button { padding: 8px; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+      ul { margin: 0; padding-left: 20px; }
+      code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>主持人控制台</h1>
+    <p>Backend: <code>http://127.0.0.1:8000</code></p>
+
+    <div class="card">
+      <h3>1) 建立房間</h3>
+      <div class="row">
+        <input id="hostName" placeholder="主持人名稱" />
+        <button onclick="createRoom()">建立房間</button>
+      </div>
+      <div id="roomInfo">尚未建立房間</div>
+      <div id="shareLink"></div>
+    </div>
+
+    <div class="card">
+      <h3>2) 遊戲控制</h3>
+      <div class="row">
+        <button onclick="startGame()">開始遊戲</button>
+        <button onclick="nextQ()">下一題</button>
+      </div>
+      <div id="question">尚未連線</div>
+    </div>
+
+    <div class="card">
+      <h3>3) 玩家列表</h3>
+      <ul id="players"></ul>
+    </div>
+
+    <div class="card">
+      <h3>4) 排行榜</h3>
+      <ul id="board"></ul>
+    </div>
+
+    <script>
+      const API = "http://127.0.0.1:8000";
+      let ws = null;
+      let currentPin = "";
+
+      async function createRoom() {
+        const host_name = (document.getElementById("hostName").value || "Host").trim();
+        const res = await fetch(`${API}/rooms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host_name }),
+        });
+        const data = await res.json();
+        currentPin = data.pin;
+
+        document.getElementById("roomInfo").textContent = `房間 PIN: ${data.pin}`;
+        document.getElementById("shareLink").innerHTML = `玩家加入連結：<a href="/player.html?pin=${data.pin}" target="_blank">/player.html?pin=${data.pin}</a>`;
+        connectWS(data.pin);
+      }
+
+      async function startGame() {
+        if (!currentPin) return alert("請先建立房間");
+        await fetch(`${API}/rooms/${currentPin}/start`, { method: "POST" });
+      }
+
+      async function nextQ() {
+        if (!currentPin) return alert("請先建立房間");
+        await fetch(`${API}/rooms/${currentPin}/next`, { method: "POST" });
+      }
+
+      function connectWS(pin) {
+        if (ws) ws.close();
+        ws = new WebSocket(`ws://127.0.0.1:8000/ws/${pin}`);
+        ws.onopen = () => ws.send("host_connected");
+        ws.onmessage = (evt) => renderState(JSON.parse(evt.data));
+      }
+
+      function renderState(s) {
+        document.getElementById("question").textContent = `Q${s.current_q + 1}: ${s.question}`;
+
+        const players = document.getElementById("players");
+        players.innerHTML = "";
+        (s.players || []).forEach((p) => {
+          const li = document.createElement("li");
+          const last = p.last_answer_correct === null ? "未作答" : (p.last_answer_correct ? "✅" : "❌");
+          li.textContent = `${p.name} (${last})`;
+          players.appendChild(li);
+        });
+
+        const board = document.getElementById("board");
+        board.innerHTML = "";
+        (s.players || []).sort((a,b)=>b.score-a.score).forEach((p) => {
+          const li = document.createElement("li");
+          li.textContent = `${p.name}: ${p.score}`;
+          board.appendChild(li);
+        });
+      }
+    </script>
+  </body>
+</html>

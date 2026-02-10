@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kahoo Lite - Player</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; }
+      .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+      input, button { padding: 8px; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+      .choices button { display: block; width: 100%; margin: 6px 0; text-align: left; }
+      code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>玩家作答頁</h1>
+    <p>Backend: <code>http://127.0.0.1:8000</code></p>
+
+    <div class="card">
+      <h3>1) 加入房間</h3>
+      <div class="row">
+        <input id="pin" placeholder="房間 PIN" />
+        <input id="playerName" placeholder="玩家名稱" />
+        <button onclick="joinRoom()">加入</button>
+      </div>
+      <div id="status">尚未加入</div>
+    </div>
+
+    <div class="card">
+      <h3>2) 題目</h3>
+      <div id="question">等待主持人開始</div>
+      <div class="choices" id="choices"></div>
+    </div>
+
+    <div class="card">
+      <h3>3) 我的分數</h3>
+      <div id="myScore">0</div>
+    </div>
+
+    <script>
+      const API = "http://127.0.0.1:8000";
+      let ws = null;
+
+      const params = new URLSearchParams(location.search);
+      const pinFromQuery = params.get("pin");
+      if (pinFromQuery) document.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("pin").value = pinFromQuery;
+      });
+
+      function v(id){ return document.getElementById(id).value.trim(); }
+
+      async function joinRoom() {
+        const pin = v("pin");
+        const name = v("playerName") || "Player";
+        const res = await fetch(`${API}/rooms/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin, name }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById("status").textContent = `加入失敗：${data.detail || "未知錯誤"}`;
+          return;
+        }
+        document.getElementById("status").textContent = `加入成功：${name}`;
+        connectWS(pin);
+      }
+
+      async function submit(choiceIndex) {
+        const pin = v("pin");
+        const name = v("playerName") || "Player";
+        const res = await fetch(`${API}/rooms/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin, name, choice_index: choiceIndex }),
+        });
+        const data = await res.json();
+        if (!res.ok) return;
+        document.getElementById("status").textContent = data.correct ? "答對了 ✅" : "答錯了 ❌";
+      }
+
+      function connectWS(pin) {
+        if (ws) ws.close();
+        ws = new WebSocket(`ws://127.0.0.1:8000/ws/${pin}`);
+        ws.onopen = () => ws.send("player_connected");
+        ws.onmessage = (evt) => renderState(JSON.parse(evt.data));
+      }
+
+      function renderState(s) {
+        document.getElementById("question").textContent = `Q${s.current_q + 1}: ${s.question}`;
+
+        const choices = document.getElementById("choices");
+        choices.innerHTML = "";
+        (s.choices || []).forEach((c, i) => {
+          const b = document.createElement("button");
+          b.textContent = `${i + 1}. ${c}`;
+          b.onclick = () => submit(i);
+          choices.appendChild(b);
+        });
+
+        const me = (s.players || []).find(p => p.name === (v("playerName") || "Player"));
+        document.getElementById("myScore").textContent = me ? String(me.score) : "0";
+      }
+    </script>
+  </body>
+</html>
