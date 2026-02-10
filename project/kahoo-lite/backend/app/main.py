@@ -1,21 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import string
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(title="Kahoo Lite")
 
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins if allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -307,3 +313,9 @@ async def broadcast_state(pin: str):
     for ws in dead:
         if ws in SOCKETS.get(pin, []):
             SOCKETS[pin].remove(ws)
+
+
+# Serve frontend directly from FastAPI (Render-friendly single service deploy)
+FRONTEND_DIR = (Path(__file__).resolve().parent.parent.parent / "frontend")
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

@@ -52,9 +52,27 @@ python3 -m http.server 5500
 - `GET /rooms/{pin}/leaderboard` 排行
 - `WS /ws/{pin}` 即時狀態
 
+## Render 部署（單服務）
+本專案已調整為：FastAPI 同時提供 API + 前端靜態頁。
+
+### 做法 A：使用 `render.yaml`（建議）
+1. 將 repo push 到 GitHub
+2. 在 Render 選擇 **Blueprint**，指向此 repo
+3. Render 會讀取 `project/kahoo-lite/render.yaml` 自動建立服務
+
+### 做法 B：手動建立 Web Service
+- Root Directory：`project/kahoo-lite/backend`
+- Build Command：`pip install -r requirements.txt`
+- Start Command：`uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- 環境變數（可選）：`ALLOWED_ORIGINS=*`
+
+部署後同一個網域可直接使用：
+- `/`（入口）
+- `/host.html`
+- `/player.html`
+- `/health`
+
 ## 下一步可擴充
 - 題庫管理（CRUD）
-- 倒數計時、速度加權計分
-- 主持人/玩家分離 UI
-- 持久化（SQLite/PostgreSQL）
+- 持久化（SQLite/PostgreSQL/Redis）
 - 登入與房間權限
