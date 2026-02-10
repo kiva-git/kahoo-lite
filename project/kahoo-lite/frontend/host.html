@@ -34,6 +34,8 @@
         <button onclick="nextQ()">下一題</button>
       </div>
       <div id="question">尚未連線</div>
+      <div id="timer">倒數：-</div>
+      <div id="lockState">狀態：-</div>
     </div>
 
     <div class="card">
@@ -50,6 +52,8 @@
       const API = "http://127.0.0.1:8000";
       let ws = null;
       let currentPin = "";
+      let timerInterval = null;
+      let secondsLeft = 0;
 
       async function createRoom() {
         const host_name = (document.getElementById("hostName").value || "Host").trim();
@@ -85,6 +89,20 @@
 
       function renderState(s) {
         document.getElementById("question").textContent = `Q${s.current_q + 1}: ${s.question}`;
+
+        secondsLeft = s.seconds_left ?? 0;
+        document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
+        document.getElementById("lockState").textContent = s.question_locked
+          ? `狀態：已鎖題（已作答 ${s.answered_count} 人）`
+          : `狀態：作答中（已作答 ${s.answered_count} 人）`;
+
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+          if (secondsLeft > 0) {
+            secondsLeft -= 1;
+            document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
+          }
+        }, 1000);
 
         const players = document.getElementById("players");
         players.innerHTML = "";

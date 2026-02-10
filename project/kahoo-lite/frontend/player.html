@@ -30,6 +30,8 @@
     <div class="card">
       <h3>2) 題目</h3>
       <div id="question">等待主持人開始</div>
+      <div id="timer">倒數：-</div>
+      <div id="lockState">狀態：-</div>
       <div class="choices" id="choices"></div>
     </div>
 
@@ -41,6 +43,10 @@
     <script>
       const API = "http://127.0.0.1:8000";
       let ws = null;
+      let timerInterval = null;
+      let secondsLeft = 0;
+      let lastQuestionIndex = -1;
+      let answeredCurrent = false;
 
       const params = new URLSearchParams(location.search);
       const pinFromQuery = params.get("pin");
@@ -80,7 +86,10 @@
           document.getElementById("status").textContent = `送出失敗：${data.detail || "未知錯誤"}`;
           return;
         }
-        document.getElementById("status").textContent = data.correct ? "答對了 ✅" : "答錯了 ❌";
+        answeredCurrent = true;
+        document.getElementById("status").textContent = data.correct
+          ? `答對了 ✅ (+${data.bonus}分)`
+          : "答錯了 ❌";
       }
 
       function connectWS(pin) {
@@ -92,22 +101,44 @@
 
       function renderState(s) {
         const started = !!s.started;
+
+        if (s.current_q !== lastQuestionIndex) {
+          lastQuestionIndex = s.current_q;
+          answeredCurrent = false;
+        }
+
         document.getElementById("question").textContent = started
           ? `Q${s.current_q + 1}: ${s.question}`
           : "等待主持人開始遊戲…";
+
+        secondsLeft = s.seconds_left ?? 0;
+        document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
+        document.getElementById("lockState").textContent = s.question_locked
+          ? "狀態：已鎖題"
+          : "狀態：作答中";
+
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+          if (secondsLeft > 0) {
+            secondsLeft -= 1;
+            document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
+          }
+        }, 1000);
 
         const choices = document.getElementById("choices");
         choices.innerHTML = "";
         (s.choices || []).forEach((c, i) => {
           const b = document.createElement("button");
           b.textContent = `${i + 1}. ${c}`;
-          b.disabled = !started;
+          b.disabled = !started || s.question_locked || answeredCurrent;
           b.onclick = () => submit(i);
           choices.appendChild(b);
         });
 
         if (!started) {
           document.getElementById("status").textContent = "尚未開始，請等主持人按開始";
+        } else if (s.question_locked) {
+          document.getElementById("status").textContent = "本題已鎖題，等待下一題";
         }
 
         const me = (s.players || []).find(p => p.name === (v("playerName") || "Player"));

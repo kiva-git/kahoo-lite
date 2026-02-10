@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import random
 import string
+import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+QUESTION_DURATION_SEC = 20
 
 
 def gen_pin(length: int = 6) -> str:
@@ -39,6 +44,11 @@ class Room:
     current_q: int = 0
     questions: List[dict] = field(default_factory=list)
     started: bool = False
+
+    question_locked: bool = False
+    question_ends_at: Optional[float] = None
+    answered_players: Set[str] = field(default_factory=set)
+    round_id: int = 0
 
 
 ROOMS: Dict[str, Room] = {}
@@ -96,7 +106,6 @@ def join_room(body: JoinRoomBody):
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
 
-    # Same name is treated as reconnect (keep score/state)
     reconnected = body.name in room.players
     if not reconnected:
         room.players[body.name] = Player(name=body.name)
@@ -114,9 +123,13 @@ async def start_game(pin: str):
     room = ROOMS.get(pin)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+
     room.started = True
     room.current_q = 0
-    await broadcast_state(pin)
+    for p in room.players.values():
+        p.last_answer_correct = None
+
+    await start_round(pin)
     return {"ok": True}
 
 
@@ -127,18 +140,41 @@ async def submit_answer(body: SubmitBody):
         raise HTTPException(status_code=404, detail="Room not found")
     if not room.started:
         raise HTTPException(status_code=400, detail="Game not started")
+
     player = room.players.get(body.name)
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
+    if room.question_locked:
+        raise HTTPException(status_code=400, detail="Question locked")
+
+    if body.name in room.answered_players:
+        raise HTTPException(status_code=400, detail="Already answered")
+
+    now = time.time()
+    if room.question_ends_at is not None and now >= room.question_ends_at:
+        room.question_locked = True
+        await broadcast_state(body.pin)
+        raise HTTPException(status_code=400, detail="Time is up")
+
     q = room.questions[room.current_q]
     correct = body.choice_index == q["answer"]
     player.last_answer_correct = correct
+    room.answered_players.add(body.name)
+
+    bonus = 0
     if correct:
-        player.score += 100
+        seconds_left = max(0, int((room.question_ends_at or now) - now))
+        bonus = max(20, min(100, 20 + seconds_left * 4))
+        player.score += bonus
 
     await broadcast_state(body.pin)
-    return {"ok": True, "correct": correct, "score": player.score}
+    return {
+        "ok": True,
+        "correct": correct,
+        "score": player.score,
+        "bonus": bonus,
+    }
 
 
 @app.post("/rooms/{pin}/next")
@@ -151,8 +187,12 @@ async def next_question(pin: str):
         room.current_q += 1
         for p in room.players.values():
             p.last_answer_correct = None
+        await start_round(pin)
+        return {"ok": True, "current_q": room.current_q}
+
+    room.question_locked = True
     await broadcast_state(pin)
-    return {"ok": True, "current_q": room.current_q}
+    return {"ok": True, "current_q": room.current_q, "finished": True}
 
 
 @app.get("/rooms/{pin}/leaderboard")
@@ -186,6 +226,41 @@ async def ws_room(websocket: WebSocket, pin: str):
             SOCKETS[pin].remove(websocket)
 
 
+async def start_round(pin: str):
+    room = ROOMS.get(pin)
+    if not room:
+        return
+
+    room.question_locked = False
+    room.question_ends_at = time.time() + QUESTION_DURATION_SEC
+    room.answered_players.clear()
+    room.round_id += 1
+
+    this_round = room.round_id
+    await broadcast_state(pin)
+    asyncio.create_task(auto_lock_round(pin, this_round))
+
+
+async def auto_lock_round(pin: str, round_id: int):
+    room = ROOMS.get(pin)
+    if not room or room.question_ends_at is None:
+        return
+
+    sleep_for = max(0.0, room.question_ends_at - time.time())
+    await asyncio.sleep(sleep_for)
+
+    room = ROOMS.get(pin)
+    if not room:
+        return
+
+    if room.round_id != round_id:
+        return
+
+    if not room.question_locked:
+        room.question_locked = True
+        await broadcast_state(pin)
+
+
 async def send_state_to_socket(pin: str, ws: WebSocket):
     room = ROOMS.get(pin)
     if not room:
@@ -193,6 +268,11 @@ async def send_state_to_socket(pin: str, ws: WebSocket):
         return
 
     q = room.questions[room.current_q]
+    now = time.time()
+    seconds_left = 0
+    if room.question_ends_at is not None:
+        seconds_left = max(0, int(room.question_ends_at - now))
+
     await ws.send_json(
         {
             "pin": pin,
@@ -200,6 +280,10 @@ async def send_state_to_socket(pin: str, ws: WebSocket):
             "current_q": room.current_q,
             "question": q["question"],
             "choices": q["choices"],
+            "question_locked": room.question_locked,
+            "seconds_left": seconds_left,
+            "question_duration": QUESTION_DURATION_SEC,
+            "answered_count": len(room.answered_players),
             "players": [
                 {
                     "name": p.name,
