@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kahoo Lite</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; }
+      .row { display: flex; gap: 8px; margin-bottom: 8px; }
+      input, button { padding: 8px; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+      .choices button { display: block; width: 100%; margin: 6px 0; text-align: left; }
+      code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Kahoo Lite</h1>
+    <p>Backend: <code>http://127.0.0.1:8000</code></p>
+
+    <div class="card">
+      <h3>1) 建房 / 加入</h3>
+      <div class="row">
+        <input id="hostName" placeholder="主持人名稱" />
+        <button onclick="createRoom()">建立房間</button>
+      </div>
+      <div class="row">
+        <input id="pin" placeholder="房間 PIN" />
+        <input id="playerName" placeholder="玩家名稱" />
+        <button onclick="joinRoom()">加入房間</button>
+      </div>
+      <div id="joinStatus"></div>
+    </div>
+
+    <div class="card">
+      <h3>2) 遊戲控制</h3>
+      <div class="row">
+        <button onclick="startGame()">開始遊戲</button>
+        <button onclick="nextQ()">下一題</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>3) 題目</h3>
+      <div id="question">尚未連線</div>
+      <div class="choices" id="choices"></div>
+    </div>
+
+    <div class="card">
+      <h3>4) 排行榜</h3>
+      <ul id="board"></ul>
+    </div>
+
+    <script>
+      const API = "http://127.0.0.1:8000";
+      let ws = null;
+
+      function val(id) { return document.getElementById(id).value.trim(); }
+
+      async function createRoom() {
+        const host_name = val("hostName") || "Host";
+        const res = await fetch(`${API}/rooms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ host_name }),
+        });
+        const data = await res.json();
+        document.getElementById("pin").value = data.pin;
+        document.getElementById("joinStatus").textContent = `已建立房間 PIN: ${data.pin}`;
+        connectWS(data.pin);
+      }
+
+      async function joinRoom() {
+        const pin = val("pin");
+        const name = val("playerName") || "Player";
+        const res = await fetch(`${API}/rooms/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin, name }),
+        });
+        const data = await res.json();
+        document.getElementById("joinStatus").textContent = data.ok ? `加入成功：${name}` : JSON.stringify(data);
+        connectWS(pin);
+      }
+
+      async function startGame() {
+        const pin = val("pin");
+        await fetch(`${API}/rooms/${pin}/start`, { method: "POST" });
+      }
+
+      async function nextQ() {
+        const pin = val("pin");
+        await fetch(`${API}/rooms/${pin}/next`, { method: "POST" });
+      }
+
+      async function submit(choiceIndex) {
+        const pin = val("pin");
+        const name = val("playerName") || "Player";
+        await fetch(`${API}/rooms/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin, name, choice_index: choiceIndex }),
+        });
+      }
+
+      function connectWS(pin) {
+        if (ws) ws.close();
+        ws = new WebSocket(`ws://127.0.0.1:8000/ws/${pin}`);
+        ws.onopen = () => ws.send("hello");
+        ws.onmessage = (evt) => {
+          const s = JSON.parse(evt.data);
+          renderState(s);
+        };
+      }
+
+      function renderState(s) {
+        document.getElementById("question").textContent = `Q${s.current_q + 1}: ${s.question}`;
+        const choices = document.getElementById("choices");
+        choices.innerHTML = "";
+        (s.choices || []).forEach((c, i) => {
+          const b = document.createElement("button");
+          b.textContent = `${i + 1}. ${c}`;
+          b.onclick = () => submit(i);
+          choices.appendChild(b);
+        });
+
+        const board = document.getElementById("board");
+        board.innerHTML = "";
+        (s.players || [])
+          .sort((a, b) => b.score - a.score)
+          .forEach((p) => {
+            const li = document.createElement("li");
+            li.textContent = `${p.name}: ${p.score}`;
+            board.appendChild(li);
+          });
+      }
+    </script>
+  </body>
+</html>
