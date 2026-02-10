@@ -52,6 +52,7 @@
       let secondsLeft = 0;
       let lastQuestionIndex = -1;
       let answeredCurrent = false;
+      const colorClasses = ["red", "blue", "yellow", "green"];
 
       const params = new URLSearchParams(location.search);
       const pinFromQuery = params.get("pin");
@@ -135,7 +136,7 @@
         choices.innerHTML = "";
         (s.choices || []).forEach((c, i) => {
           const b = document.createElement("button");
-          b.className = "choice";
+          b.className = `choice ${colorClasses[i % colorClasses.length]}`;
           b.textContent = `${i + 1}. ${c}`;
           b.disabled = !started || s.question_locked || answeredCurrent;
           b.onclick = () => submit(i);

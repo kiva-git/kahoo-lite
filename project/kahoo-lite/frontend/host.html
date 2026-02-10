@@ -27,6 +27,7 @@
             <button class="primary" onclick="createRoom()">建立房間</button>
             <button class="ghost" onclick="startGame()">開始遊戲</button>
             <button class="ghost" onclick="nextQ()">下一題</button>
+            <button class="ghost fullscreen-btn" onclick="toggleFullscreenQuestion()">全螢幕題目</button>
           </div>
           <p id="roomInfo">尚未建立房間</p>
           <p id="shareLink"></p>
@@ -47,8 +48,17 @@
 
         <section class="card col-6">
           <h3>排行榜</h3>
-          <ul class="list" id="board"></ul>
+          <ul class="list board-anim" id="board"></ul>
         </section>
+      </div>
+    </div>
+
+    <div id="fullscreenQuestion" class="fullscreen-question">
+      <div class="full-inner">
+        <button class="ghost" onclick="toggleFullscreenQuestion()">離開全螢幕</button>
+        <div class="full-meta" id="fullMeta">Q1 · 倒數 -</div>
+        <div class="full-title" id="fullQuestion">-</div>
+        <div class="choices" id="fullChoices"></div>
       </div>
     </div>
 
@@ -58,6 +68,7 @@
       let currentPin = "";
       let timerInterval = null;
       let secondsLeft = 0;
+      const colorClasses = ["red", "blue", "yellow", "green"];
 
       async function createRoom() {
         const host_name = (document.getElementById("hostName").value || "Host").trim();
@@ -84,6 +95,11 @@
         await fetch(`${API}/rooms/${currentPin}/next`, { method: "POST" });
       }
 
+      function toggleFullscreenQuestion() {
+        const el = document.getElementById("fullscreenQuestion");
+        el.classList.toggle("show");
+      }
+
       function connectWS(pin) {
         if (ws) ws.close();
         ws = new WebSocket(`ws://127.0.0.1:8000/ws/${pin}`);
@@ -108,6 +124,8 @@
           if (secondsLeft > 0) {
             secondsLeft -= 1;
             document.getElementById("timer").textContent = `${secondsLeft}s`;
+            const meta = document.getElementById("fullMeta");
+            if (meta) meta.textContent = `Q${s.current_q + 1} · 倒數 ${secondsLeft}s`;
           }
         }, 1000);
 
@@ -126,6 +144,19 @@
           const li = document.createElement("li");
           li.textContent = `#${i+1} ${p.name}: ${p.score}`;
           board.appendChild(li);
+        });
+
+        // fullscreen mirror
+        document.getElementById("fullMeta").textContent = `Q${s.current_q + 1} · 倒數 ${s.seconds_left ?? 0}s`;
+        document.getElementById("fullQuestion").textContent = s.question;
+        const fullChoices = document.getElementById("fullChoices");
+        fullChoices.innerHTML = "";
+        (s.choices || []).forEach((c, i) => {
+          const b = document.createElement("button");
+          b.className = `choice ${colorClasses[i % colorClasses.length]}`;
+          b.textContent = `${i + 1}. ${c}`;
+          b.disabled = true;
+          fullChoices.appendChild(b);
         });
       }
     </script>
