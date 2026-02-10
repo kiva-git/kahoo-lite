@@ -4,18 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kahoo Lite</title>
-    <style>
-      body { font-family: Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 12px; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 12px; }
-      a { display: inline-block; margin-right: 12px; }
-    </style>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <h1>Kahoo Lite</h1>
-    <div class="card">
-      <p>請選擇角色：</p>
-      <a href="/host.html">主持人畫面 (Host)</a>
-      <a href="/player.html">玩家畫面 (Player)</a>
+    <div class="container">
+      <div class="header">
+        <div class="brand">
+          <div class="logo"></div>
+          <div>
+            <h1 class="h1">Kahoo Lite</h1>
+            <div class="sub">Fast quiz room · realtime · speed scoring</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section class="card col-6">
+          <h3>主持人（Host）</h3>
+          <p>建立房間、控制題目、查看即時狀態與排行榜。</p>
+          <a class="link" href="/host.html">進入主持人控制台 →</a>
+        </section>
+
+        <section class="card col-6">
+          <h3>玩家（Player）</h3>
+          <p>加入房間作答，倒數內提交可獲得快答加分。</p>
+          <a class="link" href="/player.html">進入玩家作答頁 →</a>
+        </section>
+      </div>
     </div>
   </body>
 </html>

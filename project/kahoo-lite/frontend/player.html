@@ -4,40 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kahoo Lite - Player</title>
-    <style>
-      body { font-family: Arial, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; }
-      .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-      input, button { padding: 8px; }
-      .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
-      .choices button { display: block; width: 100%; margin: 6px 0; text-align: left; }
-      code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
-    </style>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <h1>玩家作答頁</h1>
-    <p>Backend: <code>http://127.0.0.1:8000</code></p>
-
-    <div class="card">
-      <h3>1) 加入房間</h3>
-      <div class="row">
-        <input id="pin" placeholder="房間 PIN" />
-        <input id="playerName" placeholder="玩家名稱" />
-        <button onclick="joinRoom()">加入</button>
+    <div class="container">
+      <div class="header">
+        <div class="brand">
+          <div class="logo"></div>
+          <div>
+            <h1 class="h1">玩家作答頁</h1>
+            <div class="sub">Player view · quick answer bonus</div>
+          </div>
+        </div>
+        <a class="link" href="/">回首頁</a>
       </div>
-      <div id="status">尚未加入</div>
-    </div>
 
-    <div class="card">
-      <h3>2) 題目</h3>
-      <div id="question">等待主持人開始</div>
-      <div id="timer">倒數：-</div>
-      <div id="lockState">狀態：-</div>
-      <div class="choices" id="choices"></div>
-    </div>
+      <div class="grid">
+        <section class="card col-8">
+          <h3>加入房間</h3>
+          <div class="row">
+            <input id="pin" placeholder="房間 PIN" />
+            <input id="playerName" placeholder="玩家名稱" />
+            <button class="primary" onclick="joinRoom()">加入</button>
+          </div>
+          <p id="status">尚未加入</p>
+        </section>
 
-    <div class="card">
-      <h3>3) 我的分數</h3>
-      <div id="myScore">0</div>
+        <section class="card col-4">
+          <h3>回合資訊</h3>
+          <div class="badge" id="lockState">狀態：-</div>
+          <p>倒數</p>
+          <div class="stat" id="timer">-</div>
+          <p>我的分數：<strong id="myScore">0</strong></p>
+        </section>
+
+        <section class="card col-12">
+          <h3 id="question">等待主持人開始</h3>
+          <div class="choices" id="choices"></div>
+        </section>
+      </div>
     </div>
 
     <script>
@@ -69,7 +74,7 @@
           document.getElementById("status").textContent = `加入失敗：${data.detail || "未知錯誤"}`;
           return;
         }
-        document.getElementById("status").textContent = `加入成功：${name}`;
+        document.getElementById("status").textContent = data.reconnected ? `已重連：${name}` : `加入成功：${name}`;
         connectWS(pin);
       }
 
@@ -108,20 +113,21 @@
         }
 
         document.getElementById("question").textContent = started
-          ? `Q${s.current_q + 1}: ${s.question}`
+          ? `Q${s.current_q + 1}. ${s.question}`
           : "等待主持人開始遊戲…";
 
         secondsLeft = s.seconds_left ?? 0;
-        document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
-        document.getElementById("lockState").textContent = s.question_locked
-          ? "狀態：已鎖題"
-          : "狀態：作答中";
+        document.getElementById("timer").textContent = `${secondsLeft}s`;
+
+        const lockEl = document.getElementById("lockState");
+        lockEl.textContent = s.question_locked ? "狀態：已鎖題" : "狀態：作答中";
+        lockEl.className = `badge ${s.question_locked ? 'status warn' : 'status ok'}`;
 
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(() => {
           if (secondsLeft > 0) {
             secondsLeft -= 1;
-            document.getElementById("timer").textContent = `倒數：${secondsLeft}s`;
+            document.getElementById("timer").textContent = `${secondsLeft}s`;
           }
         }, 1000);
 
@@ -129,6 +135,7 @@
         choices.innerHTML = "";
         (s.choices || []).forEach((c, i) => {
           const b = document.createElement("button");
+          b.className = "choice";
           b.textContent = `${i + 1}. ${c}`;
           b.disabled = !started || s.question_locked || answeredCurrent;
           b.onclick = () => submit(i);
