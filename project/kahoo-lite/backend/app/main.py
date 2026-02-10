@@ -95,11 +95,18 @@ def join_room(body: JoinRoomBody):
     room = ROOMS.get(body.pin)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    if body.name in room.players:
-        raise HTTPException(status_code=400, detail="Name already exists")
 
-    room.players[body.name] = Player(name=body.name)
-    return {"ok": True, "pin": body.pin, "player_count": len(room.players)}
+    # Same name is treated as reconnect (keep score/state)
+    reconnected = body.name in room.players
+    if not reconnected:
+        room.players[body.name] = Player(name=body.name)
+
+    return {
+        "ok": True,
+        "pin": body.pin,
+        "player_count": len(room.players),
+        "reconnected": reconnected,
+    }
 
 
 @app.post("/rooms/{pin}/start")
