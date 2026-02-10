@@ -76,7 +76,10 @@
           body: JSON.stringify({ pin, name, choice_index: choiceIndex }),
         });
         const data = await res.json();
-        if (!res.ok) return;
+        if (!res.ok) {
+          document.getElementById("status").textContent = `送出失敗：${data.detail || "未知錯誤"}`;
+          return;
+        }
         document.getElementById("status").textContent = data.correct ? "答對了 ✅" : "答錯了 ❌";
       }
 
@@ -88,16 +91,24 @@
       }
 
       function renderState(s) {
-        document.getElementById("question").textContent = `Q${s.current_q + 1}: ${s.question}`;
+        const started = !!s.started;
+        document.getElementById("question").textContent = started
+          ? `Q${s.current_q + 1}: ${s.question}`
+          : "等待主持人開始遊戲…";
 
         const choices = document.getElementById("choices");
         choices.innerHTML = "";
         (s.choices || []).forEach((c, i) => {
           const b = document.createElement("button");
           b.textContent = `${i + 1}. ${c}`;
+          b.disabled = !started;
           b.onclick = () => submit(i);
           choices.appendChild(b);
         });
+
+        if (!started) {
+          document.getElementById("status").textContent = "尚未開始，請等主持人按開始";
+        }
 
         const me = (s.players || []).find(p => p.name === (v("playerName") || "Player"));
         document.getElementById("myScore").textContent = me ? String(me.score) : "0";
