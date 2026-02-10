@@ -47,6 +47,9 @@
 
     <script>
       const API = window.location.port === "5500" ? "http://127.0.0.1:8000" : "";
+      const WS_BASE = window.location.port === "5500"
+        ? "ws://127.0.0.1:8000"
+        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
       let ws = null;
       let timerInterval = null;
       let secondsLeft = 0;
@@ -100,7 +103,7 @@
 
       function connectWS(pin) {
         if (ws) ws.close();
-        ws = new WebSocket(`ws://127.0.0.1:8000/ws/${pin}`);
+        ws = new WebSocket(`${WS_BASE}/ws/${pin}`);
         ws.onopen = () => ws.send("player_connected");
         ws.onmessage = (evt) => renderState(JSON.parse(evt.data));
       }
